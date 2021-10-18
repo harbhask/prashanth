@@ -15,7 +15,7 @@ variable "route_tables" {
 
 module "routeTable" {
     depends_on                              = [module.resource_group]
-    source                                  = "../../modules/0.13/r/azurerm_route_table"
+    source                                  = "../modules/azurerm_route_table"
     for_each                                = { for rt in toset( var.route_tables ): rt.name => rt }
         name                                = each.key
         resource_group_name                 = each.value.resource_group_name
