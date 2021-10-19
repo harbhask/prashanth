@@ -13,7 +13,7 @@ variable "storage_accounts" {
 
 module "storage_account" {
     depends_on                          = [module.resource_group]
-    source                              = "../modules/azurerm_storage_account"
+    source                              = "../../modules/0.13/r/azurerm_storage_account"
     for_each                            = { for sa in toset( var.storage_accounts ): sa.name => sa }
         name                            = each.key
         strict_name                     = each.value.strict_name
