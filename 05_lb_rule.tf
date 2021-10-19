@@ -12,7 +12,7 @@ variable "lb_rules" {
 
 module "lb_rule" {
     depends_on                              = [module.public_lbs,module.private_lbs]
-    source                                  = "../../modules/0.13/r/azurerm_lb_rule"
+    source                                  = "../modules/azurerm_lb_rule"
     for_each                                = { for lb_rule in toset(var.lb_rules) : lb_rule.name => lb_rule }
         name                                = each.key
         lb_name                             = each.value.lb_name

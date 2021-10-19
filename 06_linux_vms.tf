@@ -53,7 +53,7 @@ variable "linux_vms" {
 
 module "linux_vms" {
     depends_on                                      = [module.log_analytics_workspace]
-    source                                          = "../../modules/0.13/r/azurerm_linux_virtual_machine"
+    source                                          = "../modules/azurerm_linux_virtual_machine"
     for_each                                        = { for vm in toset( var.linux_vms ): vm.hostname => vm }
         hostname                                    = each.key
         resource_group_name                         = each.value.resource_group_name

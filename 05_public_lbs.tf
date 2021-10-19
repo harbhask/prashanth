@@ -10,7 +10,7 @@ variable "public_lbs" {
 }
 
 module "public_lbs" {
-    source                                  =  "../../modules/0.13/r/azurerm_lb_public"
+    source                                  =  "../modules/azurerm_lb_public"
     for_each                                = { for lb in toset(var.public_lbs) : lb.name => lb }
         name                                = each.key
         resource_group_name                 = each.value.resource_group_name

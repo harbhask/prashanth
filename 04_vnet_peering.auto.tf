@@ -22,7 +22,7 @@ variable "vnet_peerings" {
 
 module "vnet_peering" {
     depends_on                              = [module.resource_group, module.vnet_and_subnet]
-    source                                  = "../../modules/0.13/r/azurerm_virtual_network_peering"
+    source                                  = "../modules/azurerm_virtual_network_peering"
     for_each                                = { for peering in toset( var.vnet_peerings ): peering.peering_outgoing.name => peering }
         bidirectional                       = each.value.bidirectional
         resource_group_name                 = each.value.resource_group_name
