@@ -13,7 +13,7 @@ variable "keyvault_access_policies" {
 
 module "keyvault_access_policy" {
     depends_on                              = [module.resource_group, module.keyvault]
-    source                                  = "../../modules/0.13/r/azurerm_key_vault_access_policy"
+    source                                  = "./Modules/azurerm_key_vault_access_policy"
     for_each                                = { for policy in toset( var.keyvault_access_policies ): policy.name => policy }
         keyvault_name                       = each.value.keyvault_name
         resource_group_name                 = each.value.resource_group_name
