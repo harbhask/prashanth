@@ -1,0 +1,277 @@
+#-------------------------------------------------------------------------
+# Terraform Build Yaml Pipeline
+#-------------------------------------------------------------------------
+
+trigger: none
+
+variables:
+  - name                                              : backendKey
+    value                                               : Terraform.tfstate
+  - name                                              : backendStorageAccountContainer
+    value                                               : backend
+  - name                                              : backendStorageAccountName
+    value                                               : backendtfpip
+  - name                                              : backendResourceGroup
+    value                                               : NetworkWatcherRG
+
+  - name                                              : serviceConnectionName
+    value                                               : devopswithazure
+
+  - name                                              : terraformVersion
+    value                                               : 0.13.5
+  - name                                              : rootDirectory
+    value                                               : TerraformcodeD
+
+  - name                                              : planContainerName
+    value                                               : newterraform
+  - name                                              : planOutFile
+    value                                               : terraform.tfplan
+
+  - name                                              : TF_LOG_PATH
+    value                                               : terraform.log
+  - name                                              : TF_INPUT
+    value                                               : 0
+parameters:
+  - name                                              : Unlock_tfstate
+    type                                              : boolean
+    default                                           : false
+  - name                                              : Apply
+    type                                              : boolean
+    default                                           : false
+  - name                                              : Destroy
+    type                                              : boolean
+    default                                           : false
+
+stages:
+  - stage                                             : Unlock
+    condition                                         : eq('${{ parameters.Unlock_tfstate }}', true)
+    displayName                                       : "Unlock tfstate"
+    jobs:     
+    - job                                             : Unlock
+      displayName                                     : Unlocking tfstate
+      timeoutInMinutes                                : 300
+      condition                                       : true
+      steps:      
+      - task                                          : TerraformInstaller@0
+        inputs:     
+          terraformVersion                            : $(terraformVersion)
+      
+      - task                                          : TerraformTaskV1@0
+        displayName                                   : Terraform Init
+        inputs:     
+          command                                     : init
+          workingDirectory                            : $(System.DefaultWorkingDirectory)/$(rootDirectory)
+          backendServiceArm                           : $(serviceConnectionName)
+          backendAzureRmResourceGroupName             : $(backendResourceGroup)
+          backendAzureRmStorageAccountName            : $(backendStorageAccountName)
+          backendAzureRmContainerName                 : $(backendStorageAccountContainer)
+          backendAzureRmKey                           : $(backendKey)
+
+      
+      - task                                          : Bash@3
+        displayName                                   : Terraform Force-Unlock
+        inputs:     
+          targetType                                  : inline
+          script                                      : terraform force-unlock; env
+          workingDirectory                            : $(System.DefaultWorkingDirectory)/$(rootDirectory)
+
+  - stage                                             : Build
+    condition                                         : eq('${{ parameters.Destroy }}', false)
+    displayName                                       : Build
+    jobs:
+    - job                                             : Plan
+      displayName                                     : Building
+      timeoutInMinutes                                : 300
+      condition                                       : true
+      steps:
+      - task                                          : TerraformInstaller@0
+        inputs:
+          terraformVersion                            : $(terraformVersion)
+
+      - task                                          : Bash@3
+        displayName                                   : Debug
+        inputs:     
+          targetType                                  : inline
+          script                                      : env | grep TF_VAR; declare -xp | grep TF_VAR; echo "qwe${TF_VAR_tenant_id:0:3}qwe${serviceConnectionName}qwe$(TF_VAR_tenant_id)qwe${TF_VAR_tenant_id}qwe${TF_VAR_TENANT_ID}qwe"
+          workingDirectory                            : $(System.DefaultWorkingDirectory)/$(rootDirectory)
+
+      - task                                          : TerraformTaskV1@0
+        displayName                                   : Terraform Init
+        inputs:
+          command                                     : init
+          workingDirectory                            : $(System.DefaultWorkingDirectory)/$(rootDirectory)
+          backendServiceArm                           : $(serviceConnectionName)
+          backendAzureRmResourceGroupName             : $(backendResourceGroup)
+          backendAzureRmStorageAccountName            : $(backendStorageAccountName)
+          backendAzureRmContainerName                 : $(backendStorageAccountContainer)
+          backendAzureRmKey                           : $(backendKey)
+
+      - task                                          : TerraformTaskV1@0
+        displayName                                   : Terraform Plan
+        inputs:
+          command                                     : plan
+          commandOptions                              : >-
+                                                        -input=false
+                                                        -out=$(planOutFile) 
+          workingDirectory                            : $(System.DefaultWorkingDirectory)/$(rootDirectory)
+          environmentServiceNameAzureRM               : $(serviceConnectionName)
+
+      - task                                          : Bash@3
+        displayName                                   : Terraform Show Plan
+        inputs:
+          targetType                                  : inline
+          script                                      : terraform show $(planOutFile) > $(planOutFile).json
+          workingDirectory                            : $(System.DefaultWorkingDirectory)/$(rootDirectory)
+
+      - publish                                       : $(System.DefaultWorkingDirectory)
+        artifact                                      : terraform_apply
+
+  - stage                                             : Deploy
+    condition                                         : and( eq('${{ parameters.Destroy }}', false), eq('${{ parameters.Apply }}', true) )
+    displayName                                       : Deploy
+    dependsOn                                         : Build
+    jobs:
+    - deployment                                      : Apply
+      displayName                                     : Deploying
+      environment                                     : $(environmentname)
+      timeoutInMinutes                                : 300
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - download                                : current
+              artifact                                : terraform_apply
+            - task                                    : TerraformInstaller@0
+              inputs:
+                terraformVersion                      : $(terraformVersion)
+
+
+            - task                                    : Bash@3
+              displayName                             : remove .terraform folder
+              inputs:
+                targetType                            : inline
+                script                                : rm -rf .terraform
+                workingDirectory                      : $(Pipeline.Workspace)/terraform_apply/$(rootDirectory)
+
+
+            - task                                    : TerraformTaskV1@0
+              displayName                             : Terraform Init
+              inputs:
+                command                               : init
+                workingDirectory                      : $(Pipeline.Workspace)/terraform_apply/$(rootDirectory)
+                backendServiceArm                     : $(serviceConnectionName)
+                backendAzureRmResourceGroupName       : $(backendResourceGroup)
+                backendAzureRmStorageAccountName      : $(backendStorageAccountName)
+                backendAzureRmContainerName           : $(backendStorageAccountContainer)
+                backendAzureRmKey                     : $(backendKey)
+
+            - task                                    : TerraformTaskV1@0
+              displayName                             : Terraform Apply
+              inputs:
+                command                               : apply
+                commandOptions                        : $(planOutFile)
+                environmentServiceNameAzureRM         : $(serviceConnectionName)
+                workingDirectory                      : $(Pipeline.Workspace)/terraform_apply/$(rootDirectory)
+
+  - stage                                             : Destroy
+    condition                                         : eq('${{ parameters.Destroy }}', true)
+    displayName                                       : Destroy
+    jobs:
+    - job                                             : Plan_Destroy
+      displayName                                     : Destroying
+      timeoutInMinutes                                : 300
+      condition                                       : true
+      steps:
+      - task                                          : TerraformInstaller@0
+        inputs:
+          terraformVersion                            : $(terraformVersion)
+
+      - task                                          : TerraformTaskV1@0
+        displayName                                   : Terraform Init
+        inputs:
+          command                                     : init
+          workingDirectory                            : $(System.DefaultWorkingDirectory)/$(rootDirectory)
+          backendServiceArm                           : $(serviceConnectionName)
+          backendAzureRmResourceGroupName             : $(backendResourceGroup)
+          backendAzureRmStorageAccountName            : $(backendStorageAccountName)
+          backendAzureRmContainerName                 : $(backendStorageAccountContainer)
+          backendAzureRmKey                           : $(backendKey)
+
+      - task                                          : TerraformTaskV1@0
+        displayName                                   : Terraform Plan
+        inputs:
+          command                                     : plan
+          commandOptions                              : >-
+                                                        -destroy
+                                                        -input=false
+                                                        -out=$(planOutFile) 
+          workingDirectory                            : $(System.DefaultWorkingDirectory)/$(rootDirectory)
+          environmentServiceNameAzureRM               : $(serviceConnectionName)
+
+      - task                                          : Bash@3
+        displayName                                   : Terraform Show Plan
+        inputs:
+          targetType                                  : inline
+          script                                      : terraform show $(planOutFile) > $(planOutFile).json
+          workingDirectory                            : $(System.DefaultWorkingDirectory)/$(rootDirectory)
+
+      - task                                          : Bash@3
+        displayName                                   : PreParing Publishing files
+        inputs:
+          workingDirectory                            : $(System.DefaultWorkingDirectory)/$(rootDirectory)
+          targetType                                  : inline
+          script                                      : |
+                                                        cp -R .terraform                                 $(Build.ArtifactStagingDirectory)
+                                                        cp -R $(planOutFile)                             $(Build.ArtifactStagingDirectory)
+#                                                        mkdir                                            $(Build.ArtifactStagingDirectory)/terraform
+#                                                        cp -R *                                          $(Build.ArtifactStagingDirectory)/terraform/$(rootDirectory)
+#                                                        cp -R $(System.DefaultWorkingDirectory)/modules  $(Build.ArtifactStagingDirectory)/terraform
+
+      - publish                                       : $(System.DefaultWorkingDirectory)
+        artifact                                      : terraform_destroy
+
+  - stage                                             : Undeploy
+    condition                                         : eq('${{ parameters.Destroy }}', true)
+    displayName                                       : Undeploy
+    dependsOn                                         : Destroy
+    jobs:
+    - deployment                                      : UnApply
+      displayName                                     : UnDeploying
+      environment                                     : $(environmentname)
+      timeoutInMinutes                                : 300
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - download                                : current
+              artifact                                : terraform_destroy
+            - task                                    : TerraformInstaller@0
+              inputs:
+                terraformVersion                      : $(terraformVersion)
+                
+            - task                                    : Bash@3
+              displayName                             : remove .terraform folder
+              inputs:
+                targetType                            : inline
+                script                                : rm -rf .terraform
+                workingDirectory                      : $(Pipeline.Workspace)/terraform_destroy/$(rootDirectory)
+
+
+            - task                                    : TerraformTaskV1@0
+              displayName                             : Terraform Init
+              inputs:
+                command                               : init
+                workingDirectory                      : $(Pipeline.Workspace)/terraform_destroy/$(rootDirectory)
+                backendServiceArm                     : $(serviceConnectionName)
+                backendAzureRmResourceGroupName       : $(backendResourceGroup)
+                backendAzureRmStorageAccountName      : $(backendStorageAccountName)
+                backendAzureRmContainerName           : $(backendStorageAccountContainer)
+                backendAzureRmKey                     : $(backendKey)
+
+            - task                                    : TerraformTaskV1@0
+              displayName                             : Terraform Apply
+              inputs:
+                command                               : apply
+                commandOptions                        : $(planOutFile)
+                environmentServiceNameAzureRM         : $(serviceConnectionName)
+                workingDirectory                      : $(Pipeline.Workspace)/terraform_destroy/$(rootDirectory)
