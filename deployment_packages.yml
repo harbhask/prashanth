@@ -1,0 +1,136 @@
+#-------------------------------------------------------------------------
+# Terraform Build Yaml Pipeline
+#-------------------------------------------------------------------------
+
+trigger: none
+
+parameters:
+  - name                                              : Environment
+    type                                              : boolean
+    default                                           : 'Stage'
+    values:
+      - 'Stage'
+      - 'Dev'
+      - 'Production'
+
+stages:
+  - stage                                             : Download_Package_Stage
+    variables:
+    - group                                           : Proline-Stage
+    condition                                         : eq('${{ parameters.Environment }}', 'Stage')
+    displayName                                       : "Downloading Package"
+    jobs:     
+
+    jobs:
+    - job                                             : Download_Package
+      displayName                                     : Downloading
+      timeoutInMinutes                                : 300
+      condition                                       : true
+      steps:
+      - task: DownloadPackage@1
+        inputs:
+          packageType:  ###########
+          feed:  #########
+          definition:  $(package_name)
+          version: $(package_version)
+
+  - stage                                             : Deploy_Package_Stage
+    variables:
+    - group                                           : Proline-Stage
+    condition                                         : eq('${{ parameters.Environment }}', 'Stage')
+    displayName                                       : "Deploy Package"
+    jobs:     
+
+    jobs:
+    - job                                             : Deploy_Package
+      displayName                                     : Deploying
+      timeoutInMinutes                                : 300
+      condition                                       : true
+      steps:
+      - task: ms-vscs-rm.apachetomcat.tomcatdeployment-task.TomcatDeployment@1
+        inputs:
+          Username:  $(Tomcat_username)
+          Password:  $(Tomcat_Password)
+          Warfile:  #################
+
+  - stage                                             : Download_Package_Dev
+    variables:
+    - group                                           : Proline-Dev
+    condition                                         : eq('${{ parameters.Environment }}', 'Dev')
+    displayName                                       : "Downloading Package"
+    jobs:     
+
+    jobs:
+    - job                                             : Download_Package
+      displayName                                     : Downloading
+      timeoutInMinutes                                : 300
+      condition                                       : true
+      steps:
+      - task: DownloadPackage@1
+        inputs:
+          packageType:  ###########
+          feed:  #########
+          definition:  $(package_name)
+          version: $(package_version)
+
+  - stage                                             : Deploy_Package_Dev
+    variables:
+    - group                                           : Proline-Dev
+    condition                                         : eq('${{ parameters.Environment }}', 'Dev')
+    displayName                                       : "Deploy Package"
+    jobs:     
+
+    jobs:
+    - job                                             : Deploy_Package
+      displayName                                     : Deploying
+      timeoutInMinutes                                : 300
+      condition                                       : true
+      steps:
+      - task: ms-vscs-rm.apachetomcat.tomcatdeployment-task.TomcatDeployment@1
+        inputs:
+          Username:  $(Tomcat_username)
+          Password:  $(Tomcat_Password)
+          Warfile:  #################
+          
+  - stage                                             : Download_Package_Prod
+    variables:
+    - group                                           : Proline-Production
+    condition                                         : eq('${{ parameters.Environment }}', 'Production')
+    displayName                                       : "Downloading Package"
+    jobs:     
+
+    jobs:
+    - job                                             : Download_Package
+      displayName                                     : Downloading
+      timeoutInMinutes                                : 300
+      condition                                       : true
+      steps:
+      - task: DownloadPackage@1
+        inputs:
+          packageType:  ###########
+          feed:  #########
+          definition:  $(package_name)
+          version: $(package_version)
+
+  - stage                                             : Deploy_Package_Prod
+    variables:
+    - group                                           : Proline-Production
+    condition                                         : eq('${{ parameters.Environment }}', 'Production')
+    displayName                                       : "Deploy Package"
+    jobs:     
+
+    jobs:
+    - job                                             : Deploy_Package
+      displayName                                     : Deploying
+      timeoutInMinutes                                : 300
+      condition                                       : true
+      steps:
+      - task: ms-vscs-rm.apachetomcat.tomcatdeployment-task.TomcatDeployment@1
+        inputs:
+          Username:  $(Tomcat_username)
+          Password:  $(Tomcat_Password)
+          Warfile:  #################
+
+    
+
+
